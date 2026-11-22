@@ -39,7 +39,11 @@ import net.minecraft.world.item.ItemStack;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.AnvilUpdateEvent;
 import net.neoforged.neoforge.event.ServerChatEvent;
+import net.minecraft.world.entity.boss.wither.WitherBoss;
+import net.minecraft.world.item.Items;
+import com.mastertrait.ModAttachments;
 import net.neoforged.neoforge.event.entity.EntityStruckByLightningEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDamageEvent;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
@@ -61,7 +65,7 @@ public final class CommonEvents {
 
     /** Gives a melee weapon its trait(s) the first time it is seen. */
     public static void roll(ItemStack stack, RandomSource rand) {
-        if (!(TraitUtil.isMeleeWeapon(stack) || TraitUtil.isShield(stack) || TraitUtil.isRangedWeapon(stack)) || stack.has(ModComponents.TRAITS.get())) return;
+        if (!(TraitUtil.isMeleeWeapon(stack) || TraitUtil.isShield(stack) || TraitUtil.isRangedWeapon(stack) || Traits.hasRollRule(stack)) || stack.has(ModComponents.TRAITS.get())) return;
         List<Trait> rolled = Traits.rollFor(stack, rand);
         List<String> ids = new ArrayList<>();
         for (Trait t : rolled) ids.add(t.id());
@@ -71,8 +75,13 @@ public final class CommonEvents {
 
     private static void rollInventory(Player p) {
         Inventory inv = p.getInventory();
-        for (int i = 0; i < inv.getContainerSize(); i++) {
-            roll(inv.getItem(i), p.getRandom());
+        Traits.setRoller(p);
+        try {
+            for (int i = 0; i < inv.getContainerSize(); i++) {
+                roll(inv.getItem(i), p.getRandom());
+            }
+        } finally {
+            Traits.setRoller(null);
         }
     }
 
@@ -414,6 +423,12 @@ public final class CommonEvents {
         if (event.getEntity() instanceof Player dead) {
             return;
         }
+        if (event.getEntity() instanceof WitherBoss wither && !wither.level().isClientSide) {
+            // everyone close enough took part in the fight: they can now read Divine, Heroic and Mythical traits
+            for (Player nearby : wither.level().getEntitiesOfClass(Player.class, wither.getBoundingBox().inflate(64))) {
+                nearby.setData(ModAttachments.WITHER_SLAIN.get(), true);
+            }
+        }
         if (!(event.getEntity() instanceof Mob victim)) return;
         if (event.getSource().getEntity() instanceof Player shooter && event.getSource().getDirectEntity() instanceof AbstractArrow arrow
                 && !(arrow instanceof ThrownTrident)) {
@@ -426,6 +441,35 @@ public final class CommonEvents {
         if (event.getSource().getEntity() instanceof Player player) {
             for (Trait t : TraitUtil.heldTraits(player)) t.onKill(player, victim);
         }
+    }
+
+    public static final String REROLL_FLAG = "mt_reroll_preview";
+
+    /** Weapon + Heart of the Sea in an anvil rerolls the weapon's normal traits. The preview hides the result. */
+    @SubscribeEvent
+    public static void onAnvil(AnvilUpdateEvent event) {
+        ItemStack left = event.getLeft();
+        if (!event.getRight().is(Items.HEART_OF_THE_SEA) || left.isEmpty() || left.getCount() != 1
+                || !left.has(ModComponents.TRAITS.get())) return;
+        if (Traits.rerollNormal(left, event.getPlayer().getRandom()) == null) return;
+        ItemStack out = left.copy();
+        net.minecraft.world.item.component.CustomData.update(net.minecraft.core.component.DataComponents.CUSTOM_DATA, out,
+                tag -> tag.putBoolean(REROLL_FLAG, true));
+        event.setOutput(out);
+        event.setMaterialCost(1);
+        event.setCost(Config.REROLL_LEVEL_COST.get());
+    }
+
+    /** The real roll happens only when the player takes the result out of the anvil. */
+    @SubscribeEvent
+    public static void onAnvilTake(net.neoforged.neoforge.event.entity.player.AnvilRepairEvent event) {
+        ItemStack out = event.getOutput();
+        net.minecraft.world.item.component.CustomData data = out.get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        if (data == null || !data.contains(REROLL_FLAG)) return;
+        net.minecraft.world.item.component.CustomData.update(net.minecraft.core.component.DataComponents.CUSTOM_DATA, out,
+                tag -> tag.remove(REROLL_FLAG));
+        List<String> ids = Traits.rerollNormal(out, event.getEntity().getRandom());
+        if (ids != null) TraitUtil.setTraits(out, ids);
     }
 
     @SubscribeEvent
@@ -471,6 +515,7 @@ public final class CommonEvents {
         if (p.level().isClientSide) return;
 
         if (p.tickCount % 10 == 0) {
+            ModAttachments.syncMarker(p);
             rollInventory(p);
             Traits.tamerTick(p);
             Traits.bannerTick(p);

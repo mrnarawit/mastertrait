@@ -11,6 +11,7 @@ public class MasterTrait {
 
     public MasterTrait(IEventBus modBus, ModContainer container) {
         ModComponents.REGISTER.register(modBus);
+        ModAttachments.REGISTER.register(modBus);
         container.registerConfig(ModConfig.Type.SERVER, Config.SPEC);
     }
 }

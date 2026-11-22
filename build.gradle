@@ -3,11 +3,12 @@ plugins {
     id 'net.neoforged.moddev' version '2.0.148'
 }
 
-version = mod_version
+// jar name: mastertraits-1.0.0+mc1.21.1neoforge.jar
+version = "${mod_version}+mc${minecraft_version}neoforge"
 group = mod_group_id
 
 base {
-    archivesName = mod_id
+    archivesName = 'mastertraits'
 }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)

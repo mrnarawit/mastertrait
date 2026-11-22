@@ -84,6 +84,11 @@ public abstract class Trait {
         return ChatFormatting.AQUA;
     }
 
+    /** Colours (RGB) a Mythical trait's header and name cycle through; null = deep blue, indigo, violet. */
+    public int[] mythicalColors() {
+        return null;
+    }
+
     /** Base hue (0-1) of the shimmering header/name of Divine traits. */
     public float divineHue() {
         return 0.58f;

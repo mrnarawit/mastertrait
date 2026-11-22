@@ -29,6 +29,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.tags.EnchantmentTags;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.EntityTypeTags;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.damagesource.DamageSource;
@@ -56,6 +57,8 @@ import net.minecraft.world.entity.npc.Villager;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Item;
+import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.item.MaceItem;
 import net.minecraft.world.item.TridentItem;
@@ -90,10 +93,15 @@ public final class Traits {
     }
 
     /** Old ids that were renamed; items rolled earlier keep working. */
-    private static final Map<String, String> ALIAS = Map.of(
+    private static final Map<String, String> ALIAS = new java.util.HashMap<>(Map.of(
             "colossus_hunter", "behemoth_bane",
             "triad_volley", "tri_shot",
-            "eagles_eyes", "predator");
+            "eagles_eyes", "predator"));
+
+    /** Add-on API: items rolled with the old id keep working after a trait was renamed. */
+    public static void addAlias(String oldId, String newId) {
+        ALIAS.put(oldId, newId);
+    }
 
     public static Trait get(String id) {
         Trait t = ALL.get(id);
@@ -140,6 +148,15 @@ public final class Traits {
      */
     public static List<Trait> rollFor(ItemStack weapon, RandomSource rand) {
         List<Trait> result = new ArrayList<>();
+        List<RollRule> rules = rulesFor(weapon);
+        List<Trait> custom = null;
+        for (RollRule rule : rules) {
+            for (Trait t : rule.guaranteed(weapon)) {
+                if (Config.isEnabled(t.id()) && !result.contains(t)) result.add(t);
+            }
+            if (rule.onlyGuaranteed(weapon)) return sortByTier(result);
+            if (custom == null) custom = rule.candidates(weapon);
+        }
         // guaranteed traits
         if (TraitUtil.isRangedWeapon(weapon)) {
             if (Config.isEnabled(SHARP_SHOOTER.id())) result.add(SHARP_SHOOTER);
@@ -151,25 +168,113 @@ public final class Traits {
             while (result.size() < 3 && !pool.isEmpty()) {
                 result.add(pool.remove(rand.nextInt(pool.size())));
             }
-            return result;
+            return sortByTier(result);
+        }
+        // Divine, Heroic and Mythical traits replace the normal random trait
+        for (Trait t : result) {
+            if (t.tier().isTop()) return sortByTier(result);
         }
         // random traits: rollChance for one, then secondTraitChance for another
-        if (rand.nextDouble() >= Config.ROLL_CHANCE.get()) return result;
-        if (!TraitUtil.isShield(weapon)) {
+        if (rand.nextDouble() >= Config.ROLL_CHANCE.get()) return sortByTier(result);
+        if (!TraitUtil.isShield(weapon) && rules.isEmpty()) {
             List<Trait> heroic = pool(weapon, true);
             if (!heroic.isEmpty() && rand.nextDouble() < Config.HEROIC_CHANCE.get()) {
                 result.add(heroic.get(rand.nextInt(heroic.size())));
-                return result;
+                return sortByTier(result);
             }
         }
         for (int i = 0; i < 2; i++) {
-            List<Trait> general = pool(weapon, false);
+            List<Trait> general = custom != null ? new ArrayList<>(custom) : pool(weapon, false);
             general.removeAll(result);
             if (general.isEmpty()) break;
             result.add(general.get(rand.nextInt(general.size())));
             if (rand.nextDouble() >= Config.SECOND_TRAIT_CHANCE.get()) break;
         }
-        return result;
+        return sortByTier(result);
+    }
+
+    /** Highest tier first: Divine, Heroic, Mythical, Unique, Trait (stable). */
+    public static List<Trait> sortByTier(List<Trait> traits) {
+        traits.sort(java.util.Comparator.comparingInt(x -> x.tier().rank()));
+        return traits;
+    }
+
+    /**
+     * Anvil reroll: replaces the normal (Trait tier) traits of a weapon with new random ones, same count.
+     * Returns the new trait list, or null if the weapon has no normal trait.
+     */
+    public static List<String> rerollNormal(ItemStack weapon, RandomSource rand) {
+        List<Trait> keep = new ArrayList<>();
+        int removed = 0;
+        for (String id : TraitUtil.traitIds(weapon)) {
+            Trait t = get(id);
+            if (t != null && t.tier() == Tier.TRAIT) removed++;
+            else if (t != null) keep.add(t);
+        }
+        if (removed == 0) return null;
+        List<Trait> result = new ArrayList<>(keep);
+        for (int i = 0; i < removed; i++) {
+            List<Trait> pool = pool(weapon, false);
+            pool.removeAll(result);
+            if (pool.isEmpty()) break;
+            result.add(pool.get(rand.nextInt(pool.size())));
+        }
+        sortByTier(result);
+        List<String> ids = new ArrayList<>();
+        for (Trait t : result) ids.add(t.id());
+        return ids;
+    }
+
+    // ------------------------------------------------------------------ roll rules (add-on API)
+
+    /** Add-on API: special rolling for certain items (guaranteed traits, a custom pool for the random trait). */
+    public interface RollRule {
+        /** True if this rule handles the item (the item is also rolled when it is not a normal weapon / shield). */
+        boolean applies(ItemStack stack);
+
+        /** Traits the item always gets. */
+        List<Trait> guaranteed(ItemStack stack);
+
+        /** True if the item gets no random trait at all. */
+        default boolean onlyGuaranteed(ItemStack stack) {
+            return false;
+        }
+
+        /** Pool of the random trait, or null for the normal pool of the item. */
+        default List<Trait> candidates(ItemStack stack) {
+            return null;
+        }
+    }
+
+    private static final List<RollRule> RULES = new ArrayList<>();
+
+    public static void addRollRule(RollRule rule) {
+        RULES.add(rule);
+    }
+
+    public static boolean hasRollRule(ItemStack stack) {
+        return !rulesFor(stack).isEmpty();
+    }
+
+    /** Every rule that applies: guaranteed traits are added together, the first custom pool wins. */
+    private static List<RollRule> rulesFor(ItemStack stack) {
+        if (stack.isEmpty()) return List.of();
+        List<RollRule> out = new ArrayList<>();
+        for (RollRule r : RULES) {
+            if (r.applies(stack)) out.add(r);
+        }
+        return out;
+    }
+
+    private static Player roller;
+
+    /** Add-on API: the player whose inventory is being rolled right now (null when unknown), e.g. to check the dimension. */
+    public static Player currentRoller() {
+        return roller;
+    }
+
+    public static void setRoller(Player p) {
+        roller = p;
     }
 
     // ------------------------------------------------------------------ helpers
@@ -751,6 +856,10 @@ public final class Traits {
             ItemStack w = p.getMainHandItem();
             int kills = Math.min(need(), ItemState.getInt(w, ItemState.KILLS) + 1);
             ItemState.update(w, t -> t.putInt(ItemState.KILLS, kills));
+            // a dagger with all its kills turns into the hidden Mystic Eye of Death Perception (from the add-on)
+            if (kills >= need() && w.is(TraitUtil.DAGGER) && get("mystic_eye") != null) {
+                TraitUtil.replaceTrait(w, id(), "mystic_eye");
+            }
         }
         private boolean complete(ItemStack w) {
             return ItemState.getInt(w, ItemState.KILLS) >= need();
@@ -1049,8 +1158,6 @@ public final class Traits {
 
     // ------------------------------------------------------------------ Hell Forged
 
-    private static final ResourceLocation BLAZING_BRAND = ResourceLocation.fromNamespaceAndPath("cataclysm", "blazing_brand");
-
     public static final Trait HELL_FORGED = reg(new Trait("hell_forged") {
         @Override public boolean negatesDamage(Player holder, DamageSource source) {
             return source.is(DamageTypeTags.IS_FIRE);
@@ -1067,9 +1174,6 @@ public final class Traits {
         @Override public void onHit(HitContext c, float dealt) {
             LivingEntity t = c.target();
             t.setRemainingFireTicks(Math.max(t.getRemainingFireTicks(), ticks("fireSeconds")));
-            // Only if Cataclysm is installed
-            Holder.Reference<MobEffect> brand = BuiltInRegistries.MOB_EFFECT.getHolder(BLAZING_BRAND).orElse(null);
-            if (brand != null) t.addEffect(new MobEffectInstance(brand, ticks("blazingBrandSeconds"), 0), c.attacker());
         }
     });
 
@@ -1823,9 +1927,13 @@ public final class Traits {
 
     // ------------------------------------------------------------------ Unique traits
 
+    /** Unique, guaranteed on weapons with the tag minecraft:piglin_loved (gold weapons), never rolled as a random trait. */
     public static final Trait GOLDEN_RULE = reg(new Trait("golden_rule", Tier.UNIQUE) {
+        @Override public boolean rollable() {
+            return false;
+        }
         @Override public boolean eligible(ItemStack weapon) {
-            return isGold(weapon);
+            return weapon.is(ItemTags.PIGLIN_LOVED);
         }
         @Override public ChatFormatting nameColor() {
             return ChatFormatting.GOLD;
@@ -1835,6 +1943,17 @@ public final class Traits {
             return wearsFullGold(holder) ? bonus * 2.0 : bonus;
         }
     });
+
+    static {
+        addRollRule(new RollRule() {
+            @Override public boolean applies(ItemStack s) {
+                return s.is(ItemTags.PIGLIN_LOVED) && (TraitUtil.isMeleeWeapon(s) || TraitUtil.isShield(s) || TraitUtil.isRangedWeapon(s));
+            }
+            @Override public List<Trait> guaranteed(ItemStack s) {
+                return List.of(GOLDEN_RULE);
+            }
+        });
+    }
 
     /** Unique, guaranteed on maces (never rolled as a random trait). */
     public static final Trait CORE_SHAKER = reg(new Trait("core_shaker", Tier.UNIQUE) {
@@ -2332,11 +2451,14 @@ public final class Traits {
             return Kind.SWORD;
         }
         @Override public double damageDealtBonus(HitContext c) {
-            return c.target().getMaxHealth() >= value("minMaxHealth") ? pct("damage") : 0;
+            return dragonHealth(c.target()) ? pct("damage") : 0;
         }
         @Override public double damageTakenBonus(Player holder, DamageSource source) {
-            return source.getEntity() instanceof LivingEntity e && e.getMaxHealth() >= value("minMaxHealth")
-                    ? -pct("damageReduction") : 0;
+            return source.getEntity() instanceof LivingEntity e && dragonHealth(e) ? -pct("damageReduction") : 0;
+        }
+        private boolean dragonHealth(LivingEntity e) {
+            float hp = e.getMaxHealth();
+            return Math.abs(hp - value("health1")) < 0.5 || Math.abs(hp - value("health2")) < 0.5;
         }
     });
 

@@ -134,8 +134,8 @@ public final class AttributeBridge {
         set(p, Attributes.ATTACK_SPEED, slots.speed, s.attackSpeed, AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL);
         set(p, Attributes.ATTACK_DAMAGE, slots.damage, s.attackDamage, AttributeModifier.Operation.ADD_VALUE);
         set(p, Attributes.KNOCKBACK_RESISTANCE, slots.knockback, s.knockbackRes, AttributeModifier.Operation.ADD_VALUE);
-        setCustom(p, CRIT_CHANCE, slots.critChance, s.critChance, Config.CRIT_CHANCE_SCALE.get());
-        setCustom(p, CRIT_DAMAGE, slots.critDamage, s.critDamage, Config.CRIT_DAMAGE_SCALE.get());
+        setCustom(p, CRIT_CHANCE, slots.critChance, s.critChance, Config.CRIT_CHANCE_SCALE.get(), true);
+        setCustom(p, CRIT_DAMAGE, slots.critDamage, s.critDamage, Config.CRIT_DAMAGE_SCALE.get(), true);
         setCustom(p, DAMAGE_TAKEN, slots.taken, damageTakenViaAttribute() ? s.damageTaken : 0, Config.DAMAGE_TAKEN_SCALE.get());
         setCustom(p, ARMOR_PIERCING, slots.piercing, s.armorPiercing, 1.0);
         setCustom(p, REFLECT, slots.reflect, reflectViaAttribute() ? s.reflect : 0, Config.REFLECT_SCALE.get());
@@ -151,10 +151,30 @@ public final class AttributeBridge {
     }
 
     private static void setCustom(Player p, ResourceLocation attr, ResourceLocation modId, double fraction, double scale) {
+        setCustom(p, attr, modId, fraction, scale, false);
+    }
+
+    /** exactFlat: the final value rises by exactly the bonus, even when other mods multiply the attribute (e.g. a +5% total). */
+    private static void setCustom(Player p, ResourceLocation attr, ResourceLocation modId, double fraction, double scale, boolean exactFlat) {
         // Do not look the attribute up when there is nothing to apply and nothing to remove.
         Holder<Attribute> holder = fraction == 0 && !FOUND.containsKey(attr) ? null : find(attr);
         if (holder == null) return;
-        set(p, holder, modId, fraction * scale, AttributeModifier.Operation.ADD_VALUE);
+        double amount = fraction * scale;
+        if (exactFlat && amount != 0) {
+            AttributeInstance inst = p.getAttribute(holder);
+            if (inst != null) {
+                // ADD_VALUE is multiplied afterwards by (1 + sum of BASE) * product(1 + TOTAL): divide that out.
+                double base = 0, total = 1;
+                for (AttributeModifier m : inst.getModifiers()) {
+                    if (m.id().equals(modId)) continue;
+                    if (m.operation() == AttributeModifier.Operation.ADD_MULTIPLIED_BASE) base += m.amount();
+                    else if (m.operation() == AttributeModifier.Operation.ADD_MULTIPLIED_TOTAL) total *= 1 + m.amount();
+                }
+                double mult = (1 + base) * total;
+                if (mult > 1.0E-6) amount /= mult;
+            }
+        }
+        set(p, holder, modId, amount, AttributeModifier.Operation.ADD_VALUE);
     }
 
     private static void set(Player p, Holder<Attribute> attribute, ResourceLocation modId,

@@ -38,8 +38,12 @@ public final class TraitUtil {
     public static final String COUNTER = "ut_counter";
     public static final String MIDAS = "ut_midas";
 
+    private static final net.minecraft.tags.TagKey<net.minecraft.world.item.Item> SHIELD_TAG = net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.ITEM,
+            net.minecraft.resources.ResourceLocation.parse("rpg_series:weapon_type/shield"));
+
     public static boolean isShield(ItemStack s) {
-        return !s.isEmpty() && s.getItem() instanceof net.minecraft.world.item.ShieldItem;
+        return !s.isEmpty() && (s.getItem() instanceof net.minecraft.world.item.ShieldItem || s.is(SHIELD_TAG));
     }
 
     /** The shield in the off hand, or in the main hand when that is the one holding a shield. */
@@ -63,6 +67,11 @@ public final class TraitUtil {
     public static boolean isCrossbow(ItemStack s) {
         return !s.isEmpty() && s.getItem() instanceof net.minecraft.world.item.CrossbowItem;
     }
+
+    /** Daggers of the rpg_series mods. */
+    public static final net.minecraft.tags.TagKey<net.minecraft.world.item.Item> DAGGER = net.minecraft.tags.TagKey.create(
+            net.minecraft.core.registries.Registries.ITEM,
+            net.minecraft.resources.ResourceLocation.parse("rpg_series:weapon_type/dagger"));
 
     public static boolean isSword(ItemStack s) {
         return !s.isEmpty() && (s.is(ItemTags.SWORDS) || s.getItem() instanceof SwordItem);
@@ -99,7 +108,8 @@ public final class TraitUtil {
                 || s.getItem() instanceof SwordItem
                 || s.getItem() instanceof AxeItem
                 || s.getItem() instanceof MaceItem
-                || s.getItem() instanceof TridentItem;
+                || s.getItem() instanceof TridentItem
+                || s.is(DAGGER);
     }
 
     // ------------------------------------------------------------------ traits on stacks

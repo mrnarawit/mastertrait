@@ -11,6 +11,10 @@ public abstract class TridentTrait extends Trait {
         super(id);
     }
 
+    protected TridentTrait(String id, Tier tier) {
+        super(id, tier);
+    }
+
     @Override public final Kind kind() {
         return Kind.TRIDENT;
     }

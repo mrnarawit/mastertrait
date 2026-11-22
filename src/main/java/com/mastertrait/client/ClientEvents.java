@@ -38,8 +38,20 @@ public final class ClientEvents {
 
     @SubscribeEvent
     public static void onTooltip(ItemTooltipEvent event) {
-        List<Trait> traits = TraitUtil.getTraits(event.getItemStack(), false);
+        if (event.getItemStack().is(net.minecraft.world.item.Items.HEART_OF_THE_SEA)) {
+            event.getToolTip().add(Component.empty());
+            event.getToolTip().add(Component.literal(text("tooltip.mastertrait.reroll_item")).withStyle(ChatFormatting.AQUA));
+        }
+        net.minecraft.world.item.component.CustomData cd = event.getItemStack().get(net.minecraft.core.component.DataComponents.CUSTOM_DATA);
+        if (cd != null && cd.contains(com.mastertrait.event.CommonEvents.REROLL_FLAG)) {
+            event.getToolTip().add(Component.empty());
+            event.getToolTip().add(Component.literal(text("tooltip.mastertrait.reroll_hidden")).withStyle(ChatFormatting.LIGHT_PURPLE, ChatFormatting.OBFUSCATED));
+            event.getToolTip().add(Component.literal(text("tooltip.mastertrait.reroll_hidden_2")).withStyle(ChatFormatting.GRAY));
+            return;
+        }
+        List<Trait> traits = new java.util.ArrayList<>(TraitUtil.getTraits(event.getItemStack(), false));
         if (traits.isEmpty()) return;
+        traits.sort(java.util.Comparator.comparingInt(x -> x.tier().rank()));
 
         Minecraft mc = Minecraft.getInstance();
         Player viewer = mc.player;
@@ -49,8 +61,10 @@ public final class ClientEvents {
         List<Component> tip = event.getToolTip();
         tip.add(Component.empty());
 
+        boolean secret = topTraitsHidden();
         for (Trait trait : traits) {
-            tip.add(header(trait, event.getItemStack()));
+            boolean hide = secret && trait.tier().isTop();
+            tip.add(header(trait, event.getItemStack(), hide));
 
             Component progress = trait.progress(event.getItemStack(), viewer, gameTime);
             if (progress != null) {
@@ -73,7 +87,8 @@ public final class ClientEvents {
             if (shift) {
                 for (String line : description(trait).split("\n")) {
                     for (String part : wrap(line, 46)) {
-                        tip.add(Component.literal(part).withStyle(trait.descColor()));
+                        MutableComponent c = Component.literal(part).withStyle(trait.descColor());
+                        tip.add(hide ? c.withStyle(ChatFormatting.OBFUSCATED) : c);
                     }
                 }
             }
@@ -84,25 +99,48 @@ public final class ClientEvents {
         }
     }
 
-    private static Component header(Trait trait, ItemStack stack) {
+    /** Divine, Heroic and Mythical traits are scrambled until the player has slain the Wither. */
+    private static boolean topTraitsHidden() {
+        try {
+            if (!Config.HIDE_UNTIL_WITHER.get()) return false;
+        } catch (RuntimeException e) {
+            return false;
+        }
+        Player p = Minecraft.getInstance().player;
+        return p == null || !com.mastertrait.ModAttachments.clientFlag(p);
+    }
+
+    private static MutableComponent scramble(MutableComponent c, boolean hide) {
+        if (!hide) return c;
+        for (Component sibling : c.getSiblings()) {
+            if (sibling instanceof MutableComponent m) m.withStyle(ChatFormatting.OBFUSCATED);
+        }
+        return c.withStyle(ChatFormatting.OBFUSCATED);
+    }
+
+    private static Component header(Trait trait, ItemStack stack, boolean hide) {
         ChatFormatting nc = trait.nameColor(stack);
         Component name = Component.translatable(trait.nameKey());
         Tier tier = trait.tier();
         if (!trait.showLabel() && trait.rainbowName()) {
-            return animated(name.getString(), 0f, true);
+            return scramble(animated(name.getString(), 0f, true), hide);
         }
         switch (tier) {
+            case MYTHICAL: {
+                return mythical("✧ " + text("tooltip.mastertrait.mythical_trait") + ":", trait.mythicalColors())
+                        .append(" ").append(scramble(mythical(name.getString(), trait.mythicalColors()), hide));
+            }
             case HEROIC: {
                 MutableComponent label = animated("☆ " + text("tooltip.mastertrait.heroic_trait") + ":", 0f, true);
-                return label.append(" ").append(name.copy().withStyle(
-                        nc != null ? nc : ChatFormatting.DARK_RED));
+                return label.append(" ").append(scramble(name.copy().withStyle(
+                        nc != null ? nc : ChatFormatting.DARK_RED), hide));
             }
             case DIVINE: {
                 MutableComponent label = animated("✦ " + text("tooltip.mastertrait.divine_trait") + ":", trait.divineHue(), false);
                 MutableComponent n = nc != null
                         ? name.copy().withStyle(nc)
                         : animated(name.getString(), trait.divineHue(), false);
-                return label.append(" ").append(n);
+                return label.append(" ").append(scramble(n, hide));
             }
             case UNIQUE: {
                 if (!trait.showLabel()) {
@@ -196,6 +234,31 @@ public final class ClientEvents {
             }
             out.append(Component.literal(String.valueOf(text.charAt(i)))
                     .withStyle(Style.EMPTY.withColor(rgb & 0xFFFFFF)));
+        }
+        return out;
+    }
+
+    private static final int[] MYTHICAL_COLORS = {0x0B1F9E, 0x4B0082, 0x8F2BFF};
+
+    /** Colours flowing along the text (default deep blue -> indigo -> violet). */
+    private static MutableComponent mythical(String text, int[] palette) {
+        final int[] colors = palette != null && palette.length >= 2 ? palette : MYTHICAL_COLORS;
+        MutableComponent out = Component.empty();
+        double t = System.currentTimeMillis() / 700.0;
+        int n = colors.length;
+        for (int i = 0; i < text.length(); i++) {
+            double pos = ((t - i * 0.18) % n + n) % n;
+            int a = (int) pos;
+            double f = pos - a;
+            int c1 = colors[a % n];
+            int c2 = colors[(a + 1) % n];
+            int rgb = 0;
+            for (int shift = 16; shift >= 0; shift -= 8) {
+                int v1 = (c1 >> shift) & 0xFF;
+                int v2 = (c2 >> shift) & 0xFF;
+                rgb |= ((int) Math.round(v1 + (v2 - v1) * f)) << shift;
+            }
+            out.append(Component.literal(String.valueOf(text.charAt(i))).withStyle(Style.EMPTY.withColor(rgb & 0xFFFFFF)));
         }
         return out;
     }

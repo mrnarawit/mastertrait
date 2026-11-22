@@ -3,6 +3,7 @@
   "tooltip.mastertrait.unique_trait": "Unique Trait",
   "tooltip.mastertrait.heroic_trait": "Heroic Trait",
   "tooltip.mastertrait.divine_trait": "Divine Trait",
+  "tooltip.mastertrait.mythical_trait": "Mythical Trait",
   "tooltip.mastertrait.hold_shift": "Hold [Shift] for details",
   "trait.mastertrait.blazing.name": "Blazing",
   "trait.mastertrait.blazing.desc": "Deals +{damage}% damage to burning enemies.\nEach level of Fire Aspect adds +{damagePerFireAspect}% damage.",
@@ -91,7 +92,7 @@
   "trait.mastertrait.solo_leveling.name": "Solo Leveling",
   "trait.mastertrait.solo_leveling.desc": "No other players within {range} blocks +{experience}% bonus experience from kills.",
   "trait.mastertrait.hell_forged.name": "Hell Forged",
-  "trait.mastertrait.hell_forged.desc": "Immune to fire and lava damage. Hits set enemies on fire for {fireSeconds}s.\nIn the Nether +{netherCriticalDamage}% Critical Damage.\n?cataclysm|Hits also apply Blazing Brand for {blazingBrandSeconds}s.",
+  "trait.mastertrait.hell_forged.desc": "Immune to fire and lava damage. Hits set enemies on fire for {fireSeconds}s.\nIn the Nether +{netherCriticalDamage}% Critical Damage.",
   "trait.mastertrait.rampager.name": "Rampager",
   "trait.mastertrait.rampager.desc": "Each hit grants +{attackSpeedPerHit}% attack speed (max {maxAttackSpeed}%).\nResets after {resetSeconds}s without hitting.",
   "trait.mastertrait.tempest.name": "Tempest",
@@ -235,7 +236,7 @@
   "trait.mastertrait.requiem_of_kings.name": "Requiem of Kings",
   "trait.mastertrait.requiem_of_kings.desc": "Arrows deal +{damage}% damage to mobs with {minMaxHealth}+ max health. Killing one grants all players within {range} blocks +{buffDamage}% damage for {buffSeconds}s.",
   "trait.mastertrait.dragon_slayer.name": "Dragon Slayer",
-  "trait.mastertrait.dragon_slayer.desc": "Deals +{damage}% damage to enemies with {minMaxHealth}+ max health and you take {damageReduction}% less damage from them.",
+  "trait.mastertrait.dragon_slayer.desc": "Deals +{damage}% damage to enemies with exactly {health1} or {health2} max health and you take {damageReduction}% less damage from them.",
   "trait.mastertrait.royal_impaler.name": "Royal Impaler",
   "trait.mastertrait.royal_impaler.desc": "Deals +{damage}% damage to targets above {healthAbove}% max health, otherwise -{penalty}% damage.",
   "trait.mastertrait.sundering.name": "Sundering",
@@ -267,5 +268,8 @@
   "trait.mastertrait.ocean_splitter.name": "Ocean Splitter",
   "trait.mastertrait.ocean_splitter.desc": "Each second you charge a throw beyond {seconds}s adds +{damagePerSecond}% damage. Doubled in water.",
   "trait.mastertrait.beastial.name": "Beastial",
-  "trait.mastertrait.beastial.desc": "+{criticalChance}% Critical Chance and -{criticalDamagePenalty}% Critical Damage."
+  "trait.mastertrait.beastial.desc": "+{criticalChance}% Critical Chance and -{criticalDamagePenalty}% Critical Damage.",
+  "tooltip.mastertrait.reroll_item": "Can be used to reroll weapon traits.",
+  "tooltip.mastertrait.reroll_hidden": "Unknown traits",
+  "tooltip.mastertrait.reroll_hidden_2": "The new traits are revealed when you take the item."
 }

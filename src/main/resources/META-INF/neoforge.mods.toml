@@ -4,7 +4,7 @@ license="MIT"
 
 [[mods]]
 modId="mastertrait"
-version="1.0.2"
+version="1.0.0"
 displayName="Master Trait"
 description='''
 Gives melee weapons, shields, bows and crossbows random traits. Addon for Spell Engine, Critical Strike and MRPG Lib.
@@ -24,33 +24,26 @@ versionRange="[1.21.1]"
 ordering="NONE"
 side="BOTH"
 
-# NOTE: modId must match the id shown in the in-game Mods list. If the game says one of these
-# is missing although the mod is installed, change the modId here to the real one.
+# Minimum versions: Spell Engine 1.10.9, Critical Strike 1.0.4, MRPG Lib 2.8.1 (1.21.1 builds).
+# NOTE: modId must match the id shown in the in-game Mods list.
 [[dependencies.mastertrait]]
 modId="spell_engine"
 type="required"
-versionRange="[0,)"
+versionRange="[1.10.9,)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.mastertrait]]
 modId="critical_strike"
 type="required"
-versionRange="[0,)"
+versionRange="[1.0.4,)"
 ordering="AFTER"
 side="BOTH"
 
 [[dependencies.mastertrait]]
 modId="mrpg_lib"
 type="required"
-versionRange="[0,)"
-ordering="AFTER"
-side="BOTH"
-
-[[dependencies.mastertrait]]
-modId="cataclysm"
-type="optional"
-versionRange="[0,)"
+versionRange="[2.8.1,)"
 ordering="AFTER"
 side="BOTH"
 

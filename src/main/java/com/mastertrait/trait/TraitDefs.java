@@ -21,7 +21,20 @@ public final class TraitDefs {
         return CORE;
     }
 
+    private static final Map<String, String> GROUP_OF = new LinkedHashMap<>();
+    private static String currentGroup = "weapons";
+
+    /** Config section the following defs belong to (weapons, shields, unique, bows, swords, tridents or an add-on name). */
+    private static void group(String name) {
+        currentGroup = name;
+    }
+
+    public static String groupOf(String id) {
+        return GROUP_OF.getOrDefault(id, "addons");
+    }
+
     private static void def(String id, Object... kv) {
+        GROUP_OF.put(id, currentGroup);
         List<ParamDef> list = new ArrayList<>();
         for (int i = 0; i < kv.length; i += 2) {
             list.add(new ParamDef((String) kv[i], ((Number) kv[i + 1]).doubleValue()));
@@ -30,6 +43,7 @@ public final class TraitDefs {
     }
 
     static {
+        group("weapons");
         // damage vs. target type
         def("blazing", "damage", 4, "damagePerFireAspect", 1);
         def("insect_crusher", "damage", 7.5);
@@ -82,7 +96,7 @@ public final class TraitDefs {
         def("midas_touch", "chance", 5, "chancePerLooting", 1, "absorptionSeconds", 30, "goldMin", 1, "goldMax", 3);
         def("solo_leveling", "experience", 25, "range", 16);
         
-        def("hell_forged", "netherCriticalDamage", 8, "fireSeconds", 4, "blazingBrandSeconds", 12);
+        def("hell_forged", "netherCriticalDamage", 8, "fireSeconds", 4);
         def("rampager", "attackSpeedPerHit", 0.5, "maxAttackSpeed", 20, "resetSeconds", 3);
         def("tempest", "seconds", 15, "lightningDamageTaken", 100);
         def("phial_blade", "chance", 5, "seconds", 15, "cooldownSeconds", 60, "chancePerSweeping", 1,
@@ -108,6 +122,7 @@ public final class TraitDefs {
         def("dune_stalker", "movementSpeed", 6, "attackSpeed", 8);
         def("frostborn", "chance", 15, "seconds", 4);
         def("glacial_fang", "damage", 16, "healthAbove", 50, "extraDurability", 1);
+        group("shields");
         // shield
         def("spikey", "reflect", 10, "reflectPerThorns", 2.5);
         def("fortitude", "maxHealth", 2);
@@ -123,9 +138,11 @@ public final class TraitDefs {
         def("storm_reservoir", "blocks", 10, "baseDamage", 8, "unbreakingScale", 0.5);
         def("wonder_reflect", "chance", 25, "damageMultiplier", 2);
         def("tanker_spirit", "lowHealthBelow", 15, "healPercent", 15, "cooldownSeconds", 300);
+        group("unique");
         // unique
         def("golden_rule", "experience", 15);
         def("core_shaker", "hits", 8, "range", 6, "baseDamage", 6, "damagePerBreach", 1, "damagePerMob", 1);
+        group("bows");
         // bow / crossbow
         def("sharp_shooter", "damagePerBlock", 2, "armorPiercingPerBlock", 1);
         def("oiled", "damage", 8, "extraFireSeconds", 1);
@@ -155,8 +172,10 @@ public final class TraitDefs {
         def("shatterpoint", "armorIgnore", 50);
         def("phoenixs_last_arrow", "healthBelow", 20, "damage", 100, "heal", 10, "cooldownSeconds", 60);
         def("requiem_of_kings", "minMaxHealth", 300, "damage", 16, "range", 12, "buffDamage", 10, "buffSeconds", 12);
+        group("swords");
         // sword
-        def("dragon_slayer", "minMaxHealth", 1800, "damage", 24, "damageReduction", 16);
+        def("dragon_slayer", "health1", 1800, "health2", 2250, "damage", 24, "damageReduction", 16);
+        group("tridents");
         // trident
         def("will_of_the_ocean", "damage", 8, "damageReduction", 8);
         def("rain_dance", "rainDamage", 4, "rainAttackSpeed", 4, "thunderDamage", 8, "thunderAttackSpeed", 8);
@@ -164,7 +183,7 @@ public final class TraitDefs {
         def("sundering", "armorIgnore", 20);
         def("coral_piercer", "healthMultiple", 2, "damage", 12, "criticalDamagePenalty", 8);
         def("executioners_prong", "healthBelow", 25, "damage", 24, "penalty", 8);
-        def("relentless", "damagePerHit", 1, "maxDamage", 20, "resetSeconds", 4);
+        def("relentless", "damagePerHit", 2, "maxDamage", 20, "resetSeconds", 4);
         def("linebreaker", "damage", 60, "range", 4);
         def("blessed_origin_water", "damage", 6, "attackSpeed", 6, "damageReduction", 6, "waterMultiplier", 2);
         def("abyssal_reaver", "aquaticDamage", 24, "damage", 8);
@@ -178,11 +197,60 @@ public final class TraitDefs {
         def("beastial", "criticalChance", 8, "criticalDamagePenalty", 8);
         // divine / heroic
         CORE.addAll(DEFS.keySet());
+        currentGroup = "addons"; // add-ons that do not call addonGroup() end up here
     }
 
-    /** Add-on API: declares the numbers of an add-on trait (call before building the add-on's own config). */
+    /**
+     * Add-on API: declares the numbers of an add-on trait (call before building the add-on's own config).
+     * kv = "key", defaultValue, "key", defaultValue... Call {@link #addonGroup(String)} first to name the config section.
+     */
     public static void registerAddon(String id, Object... kv) {
         def(id, kv);
+    }
+
+    /** Add-on API: the config section (e.g. "extraordinaries") that the following registerAddon calls are written under. */
+    public static void addonGroup(String name) {
+        currentGroup = name;
+    }
+
+    /** Readable name of a trait id for config comments (wound_destroyer -> Wound Destroyer). */
+    public static String prettyName(String id) {
+        StringBuilder sb = new StringBuilder();
+        for (String w : id.split("_")) {
+            if (w.isEmpty()) continue;
+            if (sb.length() > 0) sb.append(' ');
+            sb.append(Character.toUpperCase(w.charAt(0))).append(w.substring(1));
+        }
+        return sb.toString();
+    }
+
+    private static final java.util.Set<String> FLAT = java.util.Set.of("fixedDamage", "baseDamage", "attackDamage", "armor", "toughness",
+            "armorPiercing", "armorPiercingPerBlock", "armorPiercingPerLevel", "maxHealth", "flatReduction", "damagePerBreach",
+            "damagePerMob", "damagePerUnbreaking", "toughnessPerBlock", "maxToughness", "bloodthirst.heal", "aegis.heal",
+            "shock_absorber.damagePerStack", "oblivion_bane.damagePerLevel", "behemoth_bane.damagePerLevel", "radiance.damage",
+            "storm_reservoir.baseDamage", "shock_absorber.knockback");
+    private static final java.util.Set<String> COUNT = java.util.Set.of("hits", "shots", "targets", "minMobs", "maxDebuffs", "strikes",
+            "levels", "rewards", "slownessLevel", "maxPoisonLevel", "shareLevel", "levelsPerRange", "goldMin", "goldMax",
+            "durability", "hunger", "hurtOwner", "includeArmor");
+    private static final java.util.Set<String> MULT = java.util.Set.of("multiplier", "damageMultiplier", "healthMultiple",
+            "waterMultiplier", "unbreakingScale");
+    private static final java.util.Set<String> HEALTH = java.util.Set.of("minMaxHealth", "health1", "health2", "instakillHealth");
+
+    /** Short unit hint for a config value, or null when unsure. */
+    public static String unitOf(String id, String key) {
+        if (FLAT.contains(id + "." + key) || FLAT.contains(key)) return "points (not percent)";
+        if (HEALTH.contains(key)) return "max health points";
+        if (COUNT.contains(key)) return "count";
+        if (MULT.contains(key)) return "multiplier (x)";
+        String k = key.toLowerCase(java.util.Locale.ROOT);
+        if (k.endsWith("seconds") || k.equals("seconds")) return "seconds";
+        if (k.equals("range") || k.equals("distance") || k.equals("radius") || k.equals("blocks") || k.endsWith("range") || k.endsWith("radius")) return "blocks";
+        if (k.contains("ticks")) return "ticks";
+        for (String w : new String[]{"damage", "chance", "speed", "reduction", "resistance", "heal", "lifesteal", "experience", "penalty",
+                "bonus", "reflect", "armorignore", "critical", "percent", "rage", "health", "conversion", "knockback", "pergear"}) {
+            if (k.contains(w)) return "percent (5 = 5%)";
+        }
+        return null;
     }
 
     public static Map<String, List<ParamDef>> all() {
